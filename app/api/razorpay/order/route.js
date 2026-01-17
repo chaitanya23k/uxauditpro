@@ -3,25 +3,54 @@ import Razorpay from "razorpay"
 
 export async function POST(req) {
   try {
-    const { amount } = await req.json()
+    const { amount, plan } = await req.json()
 
-    if (!amount) {
-      return NextResponse.json({ error: "Amount missing" }, { status: 400 })
+    if (!amount || !plan) {
+      return NextResponse.json(
+        { error: "amount and plan are required" },
+        { status: 400 }
+      )
+    }
+
+    // ✅ Razorpay keys must be SERVER SIDE ONLY
+    const key_id = process.env.RAZORPAY_KEY_ID
+    const key_secret = process.env.RAZORPAY_KEY_SECRET
+
+    if (!key_id || !key_secret) {
+      return NextResponse.json(
+        { error: "Razorpay keys missing in environment variables" },
+        { status: 500 }
+      )
     }
 
     const razorpay = new Razorpay({
-      key_id: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
+      key_id,
+      key_secret,
     })
+
+    // ✅ Convert USD → INR (Approx)
+    // You can change this rate anytime
+    const usdToInrRate = 83
+    const amountInINR = Math.round(Number(amount) * usdToInrRate)
 
     const order = await razorpay.orders.create({
-      amount: amount * 100, // Razorpay needs paise
+      amount: amountInINR * 100, // ✅ paise
       currency: "INR",
-      receipt: "receipt_" + Date.now(),
+      receipt: `receipt_${plan}_${Date.now()}`,
+      notes: {
+        plan,
+        originalUSD: amount,
+      },
     })
 
-    return NextResponse.json(order)
+    return NextResponse.json({ order })
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Order creation failed",
+        details: err?.message || "Unknown error",
+      },
+      { status: 500 }
+    )
   }
 }

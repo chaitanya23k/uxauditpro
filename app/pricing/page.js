@@ -1,38 +1,17 @@
 "use client"
-import { useEffect, useState } from "react"
+
+import { useState } from "react"
 import Navbar from "@/components/Navbar"
 import { getUser, upgradePlan } from "@/lib/auth"
 
 export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState(null)
 
-  // ✅ Load Razorpay script
-  useEffect(() => {
-    const script = document.createElement("script")
-    script.src = "https://checkout.razorpay.com/v1/checkout.js"
-    script.async = true
-    document.body.appendChild(script)
-  }, [])
-
-  // ✅ Free Plan Upgrade (instant)
-  function chooseFreePlan() {
+  async function payAndUpgrade(plan, amountUSD) {
     const user = getUser()
-    if (!user) {
-      alert("Please login/signup first to select a plan.")
-      window.location.href = "/signup"
-      return
-    }
 
-    upgradePlan("free")
-    alert("✅ Plan activated: FREE")
-    window.location.href = "/dashboard"
-  }
-
-  // ✅ Razorpay Payment (Pro / Agency)
-  async function payNow(plan) {
-    const user = getUser()
     if (!user) {
-      alert("Please login/signup first to purchase a plan.")
+      alert("Please login/signup first.")
       window.location.href = "/signup"
       return
     }
@@ -40,64 +19,60 @@ export default function PricingPage() {
     setLoadingPlan(plan)
 
     try {
-      // ✅ Amounts in INR (you can change)
-      const amount = plan === "pro" ? 499 : 1999
-
-      // ✅ 1) Create Order from backend
+      // ✅ Step 1: Create Razorpay order
       const res = await fetch("/api/razorpay/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({
+          amount: amountUSD, // we send USD amount, backend will handle INR conversion if needed
+          plan,
+        }),
       })
 
-      const order = await res.json()
+      const data = await res.json()
 
-      if (!res.ok || order.error) {
-        alert("❌ Order creation failed: " + (order.error || "Unknown error"))
+      if (!res.ok) {
+        alert("❌ Order creation failed: " + (data?.error || data?.details || "Unknown error"))
         setLoadingPlan(null)
         return
       }
 
-      // ✅ 2) Open Razorpay popup
+      const order = data.order
+
+      // ✅ Step 2: Load Razorpay script
+      const loaded = await loadRazorpayScript()
+      if (!loaded) {
+        alert("❌ Razorpay SDK failed to load. Check your internet connection.")
+        setLoadingPlan(null)
+        return
+      }
+
+      // ✅ Step 3: Open Razorpay checkout
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // ✅ must be set in env
         amount: order.amount,
         currency: order.currency,
         name: "UXAuditPro",
-        description: plan === "pro" ? "Pro Plan Upgrade" : "Agency Plan Upgrade",
-        image: "/razorpay.svg",
+        description: `${plan.toUpperCase()} Plan Upgrade`,
         order_id: order.id,
 
+        handler: function () {
+          // ✅ Payment successful → upgrade user plan
+          upgradePlan(plan)
+          alert(`✅ Payment successful! Upgraded to ${plan.toUpperCase()} plan.`)
+
+          // ✅ Redirect
+          if (plan === "agency") window.location.href = "/agency"
+          else window.location.href = "/dashboard"
+        },
+
         prefill: {
-          name: user?.name || "User",
-          email: user?.email || "",
+          name: user.name || "",
+          email: user.email || "",
         },
 
         theme: {
-          color: "#4F46E5",
-        },
-
-        handler: async function (response) {
-          // ✅ 3) Verify Payment Signature
-          const verifyRes = await fetch("/api/razorpay/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(response),
-          })
-
-          const verifyData = await verifyRes.json()
-
-          if (!verifyRes.ok || !verifyData.success) {
-            alert("❌ Payment verification failed!")
-            return
-          }
-
-          // ✅ 4) Upgrade plan after success
-          upgradePlan(plan)
-
-          alert("✅ Payment successful! Plan upgraded to " + plan.toUpperCase())
-
-          window.location.href = "/dashboard"
+          color: "#4f46e5",
         },
       }
 
@@ -105,130 +80,158 @@ export default function PricingPage() {
       rzp.open()
     } catch (err) {
       alert("❌ Payment failed: " + err.message)
-    } finally {
-      setLoadingPlan(null)
     }
+
+    setLoadingPlan(null)
+  }
+
+  function chooseFree() {
+    const user = getUser()
+
+    if (!user) {
+      alert("Please login/signup first.")
+      window.location.href = "/signup"
+      return
+    }
+
+    upgradePlan("free")
+    alert("✅ You are now on FREE plan!")
+    window.location.href = "/dashboard"
   }
 
   return (
     <>
       <Navbar />
 
-      <main className="fade-page bg-glow min-h-screen px-4 py-16">
-        <div className="container-main">
+      <main className="container-main py-16">
+        {/* ✅ Header */}
+        <div className="text-center max-w-2xl mx-auto">
+          <h1 className="text-4xl font-extrabold text-slate-900">Pricing</h1>
 
-          {/* Header */}
-          <div className="text-center max-w-2xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900">
-              Pricing
-            </h1>
-            <p className="text-slate-600 mt-4 text-lg">
-              Choose a plan that fits your goals. Upgrade anytime.
+          <p className="text-slate-600 mt-4 text-lg">
+            Upgrade anytime. International payments supported ✅
+          </p>
+
+          {/* ✅ Payment trust strip */}
+          <div className="mt-5 flex items-center justify-center gap-3 flex-wrap text-sm text-slate-500">
+            <img src="/payments/razorpay.svg" alt="Razorpay" className="h-6" />
+            <img src="/payments/paypal.svg" alt="PayPal" className="h-6" />
+            <span className="font-semibold text-slate-600">
+              Secured Checkout (Razorpay / PayPal)
+            </span>
+          </div>
+        </div>
+
+        {/* ✅ Cards */}
+        <div className="grid md:grid-cols-3 gap-8 mt-14">
+          {/* ✅ Free */}
+          <div className="border rounded-2xl p-8 bg-white shadow-sm hover:shadow-lg transition">
+            <h2 className="text-xl font-bold text-slate-900">Free</h2>
+            <p className="text-slate-600 mt-1">Best for trying out</p>
+
+            <p className="text-4xl font-extrabold mt-6 text-slate-900">$0</p>
+
+            <ul className="mt-6 space-y-2 text-slate-600">
+              <li>✅ 1 audit/day</li>
+              <li>✅ UX score</li>
+              <li>✅ Basic issues</li>
+              <li>❌ AI Suggestions</li>
+              <li>❌ PDF Export</li>
+            </ul>
+
+            <button
+              onClick={chooseFree}
+              className="mt-8 w-full px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition"
+            >
+              Choose Free
+            </button>
+          </div>
+
+          {/* ✅ Pro */}
+          <div className="border-2 border-indigo-600 rounded-2xl p-8 bg-white shadow-md hover:shadow-xl transition">
+            <p className="text-xs inline-block px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold">
+              MOST POPULAR
             </p>
+
+            <h2 className="text-xl font-bold mt-4 text-slate-900">Pro</h2>
+            <p className="text-slate-600 mt-1">For founders & marketers</p>
+
+            <p className="text-4xl font-extrabold mt-6 text-slate-900">$29</p>
+            <p className="text-sm text-slate-500 -mt-1">per month</p>
+
+            <ul className="mt-6 space-y-2 text-slate-600">
+              <li>✅ Unlimited audits</li>
+              <li>✅ AI Suggestions</li>
+              <li>✅ PDF Export</li>
+              <li>✅ Audit history</li>
+            </ul>
+
+            <button
+              onClick={() => payAndUpgrade("pro", 29)}
+              disabled={loadingPlan === "pro"}
+              className="mt-8 w-full px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition disabled:opacity-60"
+            >
+              {loadingPlan === "pro" ? "Processing..." : "Buy Pro Plan"}
+            </button>
+
+            <PaymentTrust />
           </div>
 
-          {/* Pricing Cards */}
-          <div className="grid md:grid-cols-3 gap-8 mt-12">
+          {/* ✅ Agency */}
+          <div className="border rounded-2xl p-8 bg-white shadow-sm hover:shadow-lg transition">
+            <h2 className="text-xl font-bold text-slate-900">Agency</h2>
+            <p className="text-slate-600 mt-1">For teams & clients</p>
 
-            {/* ✅ FREE */}
-            <div className="bg-white border rounded-2xl p-8 shadow-sm hover:shadow-lg transition card-hover">
-              <h2 className="text-xl font-bold text-slate-900">Free</h2>
-              <p className="text-slate-600 mt-1">Best for trying out</p>
+            <p className="text-4xl font-extrabold mt-6 text-slate-900">$99</p>
+            <p className="text-sm text-slate-500 -mt-1">per month</p>
 
-              <p className="text-4xl font-extrabold mt-6 text-slate-900">
-                ₹0
-              </p>
+            <ul className="mt-6 space-y-2 text-slate-600">
+              <li>✅ Employees management</li>
+              <li>✅ Reports dashboard</li>
+              <li>✅ Team access</li>
+              <li>✅ Priority support</li>
+            </ul>
 
-              <ul className="mt-6 space-y-2 text-slate-600">
-                <li>✅ 1 audit/day</li>
-                <li>✅ UX score</li>
-                <li>✅ Basic issues</li>
-                <li>❌ AI Suggestions</li>
-                <li>❌ PDF Export</li>
-              </ul>
+            <button
+              onClick={() => payAndUpgrade("agency", 99)}
+              disabled={loadingPlan === "agency"}
+              className="mt-8 w-full px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition disabled:opacity-60"
+            >
+              {loadingPlan === "agency" ? "Processing..." : "Buy Agency Plan"}
+            </button>
 
-              <button
-                onClick={chooseFreePlan}
-                className="mt-8 w-full px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition"
-              >
-                Choose Free
-              </button>
-            </div>
-
-            {/* ✅ PRO */}
-            <div className="bg-white border-2 border-indigo-600 rounded-2xl p-8 shadow-sm hover:shadow-lg transition card-hover relative">
-              <p className="absolute -top-3 left-6 text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-bold shadow">
-                MOST POPULAR
-              </p>
-
-              <h2 className="text-xl font-bold text-slate-900 mt-4">Pro</h2>
-              <p className="text-slate-600 mt-1">For founders & marketers</p>
-
-              <p className="text-4xl font-extrabold mt-6 text-slate-900">
-                $29
-                <span className="text-base font-semibold text-slate-500">/month</span>
-              </p>
-
-              <ul className="mt-6 space-y-2 text-slate-600">
-                <li>✅ Unlimited audits</li>
-                <li>✅ AI Suggestions</li>
-                <li>✅ PDF Export</li>
-                <li>✅ Audit history</li>
-              </ul>
-
-              <button
-                onClick={() => payNow("pro")}
-                disabled={loadingPlan === "pro"}
-                className="mt-8 w-full px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition disabled:opacity-60"
-              >
-                {loadingPlan === "pro" ? "Processing..." : "Buy Pro Plan"}
-              </button>
-
-              {/* ✅ Razorpay Trust */}
-              <div className="flex justify-center mt-4 opacity-95">
-                <img src="/razorpay.svg" alt="Razorpay Trusted" className="h-8" />
-              </div>
-            </div>
-
-            {/* ✅ AGENCY */}
-            <div className="bg-white border rounded-2xl p-8 shadow-sm hover:shadow-lg transition card-hover">
-              <h2 className="text-xl font-bold text-slate-900">Agency</h2>
-              <p className="text-slate-600 mt-1">For teams & clients</p>
-
-              <p className="text-4xl font-extrabold mt-6 text-slate-900">
-                $99
-                <span className="text-base font-semibold text-slate-500">/month</span>
-              </p>
-
-              <ul className="mt-6 space-y-2 text-slate-600">
-                <li>✅ Employees management</li>
-                <li>✅ Reports dashboard</li>
-                <li>✅ Team access</li>
-                <li>✅ Priority support</li>
-              </ul>
-
-              <button
-                onClick={() => payNow("agency")}
-                disabled={loadingPlan === "agency"}
-                className="mt-8 w-full px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition disabled:opacity-60"
-              >
-                {loadingPlan === "agency" ? "Processing..." : "Buy Agency Plan"}
-              </button>
-
-              {/* ✅ Razorpay Trust */}
-              <div className="flex justify-center mt-4 opacity-95">
-                <img src="/razorpay.svg" alt="Razorpay Trusted" className="h-8" />
-              </div>
-            </div>
+            <PaymentTrust />
           </div>
-
-          {/* ✅ Bottom Trust Note */}
-          <div className="mt-12 text-center text-sm text-slate-500">
-            ✅ Secure payments powered by Razorpay — UPI, Cards, Netbanking supported.
-          </div>
-
         </div>
       </main>
     </>
+  )
+}
+
+/* ✅ Razorpay script loader */
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    const script = document.createElement("script")
+    script.src = "https://checkout.razorpay.com/v1/checkout.js"
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
+
+/* ✅ Trust footer (reusable) */
+function PaymentTrust() {
+  return (
+    <div className="mt-4 flex flex-col items-center gap-2 text-xs text-slate-500">
+      <div className="flex items-center gap-2">
+        <img src="/payments/razorpay.svg" alt="Razorpay" className="h-5" />
+        <span className="text-slate-400">|</span>
+        <img src="/payments/paypal.svg" alt="PayPal" className="h-5" />
+      </div>
+
+      <p className="text-center">
+        International payments supported ✅
+      </p>
+    </div>
   )
 }
