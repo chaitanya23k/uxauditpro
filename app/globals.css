@@ -110,3 +110,12 @@ body {
               linear-gradient(to bottom, #ffffff, #f8fafc);
 }
 
+
+.card-hover {
+  transition: all 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px) scale(1.01);
+}
+
+

@@ -1,49 +1,70 @@
 "use client"
+
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { onAuthStateChanged, signOut } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
-import { auth, db } from "@/lib/firebase"
-import { usePathname, useRouter } from "next/navigation"
+import { getUser, logout } from "@/lib/auth"
 
 export default function Navbar() {
-  const [userData, setUserData] = useState(null)
-  const pathname = usePathname()
-  const router = useRouter()
+  const [user, setUser] = useState(null)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setUserData(null)
-        return
-      }
-
-      const ref = doc(db, "users", user.uid)
-      const snap = await getDoc(ref)
-
-      if (snap.exists()) {
-        setUserData({ uid: user.uid, ...snap.data() })
-      }
-    })
-
-    return () => unsub()
+    const u = getUser()
+    setUser(u)
   }, [])
 
-  async function logout() {
-    await signOut(auth)
-    router.push("/")
+  const role = user?.role || "guest"
+
+  function NavLinks({ mobile = false }) {
+    const linkClass = mobile
+      ? "block px-4 py-3 rounded-xl hover:bg-slate-50 font-semibold text-slate-800 transition"
+      : "hover:text-indigo-600 transition font-semibold text-slate-700"
+
+    return (
+      <>
+        <Link onClick={() => setOpen(false)} className={linkClass} href="/">
+          Home
+        </Link>
+
+        <Link onClick={() => setOpen(false)} className={linkClass} href="/pricing">
+          Pricing
+        </Link>
+
+        <Link onClick={() => setOpen(false)} className={linkClass} href="/about">
+          About
+        </Link>
+
+        <Link onClick={() => setOpen(false)} className={linkClass} href="/contact">
+          Contact
+        </Link>
+
+        {user && (
+          <Link onClick={() => setOpen(false)} className={linkClass} href="/dashboard">
+            Dashboard
+          </Link>
+        )}
+
+        {role === "agency" && (
+          <Link onClick={() => setOpen(false)} className={linkClass} href="/agency">
+            Agency
+          </Link>
+        )}
+
+        {role === "admin" && (
+          <Link onClick={() => setOpen(false)} className={linkClass} href="/admin">
+            Admin
+          </Link>
+        )}
+      </>
+    )
   }
 
-  const role = userData?.role || "guest"
-  const plan = userData?.plan || "free"
-
   return (
-    <header className="bg-white/70 backdrop-blur border-b sticky top-0 z-50">
+    <header className="bg-white/80 border-b sticky top-0 z-50 backdrop-blur">
       <div className="container-main flex items-center justify-between py-4">
-
-        {/* Logo */}
+        {/* ✅ Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-extrabold">
             U
           </div>
           <span className="font-extrabold text-lg text-slate-900">
@@ -51,43 +72,14 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Links */}
-        <nav className="hidden md:flex items-center gap-8 font-semibold text-slate-700">
-          <Link className="hover:text-indigo-600" href="/">Home</Link>
-          <Link className="hover:text-indigo-600" href="/pricing">Pricing</Link>
-
-          {/* ✅ Only show Dashboard when logged in */}
-          {userData && (
-            <Link className="hover:text-indigo-600" href="/dashboard">
-              Dashboard
-            </Link>
-          )}
-
-          {/* ✅ Agency */}
-          {role === "agency" && (
-            <Link className="hover:text-indigo-600" href="/agency">
-              Agency
-            </Link>
-          )}
-
-          {/* ✅ Admin */}
-          {role === "admin" && (
-            <Link className="hover:text-indigo-600" href="/admin">
-              Admin
-            </Link>
-          )}
-
-          {/* ✅ Account page */}
-          {userData && (
-            <Link className="hover:text-indigo-600" href="/account">
-              Account
-            </Link>
-          )}
+        {/* ✅ Desktop Links */}
+        <nav className="hidden md:flex items-center gap-8">
+          <NavLinks />
         </nav>
 
-        {/* Buttons */}
-        <div className="flex items-center gap-3">
-          {!userData ? (
+        {/* ✅ Desktop Buttons */}
+        <div className="hidden md:flex items-center gap-3">
+          {!user ? (
             <>
               <Link href="/login" className="btn-outline">
                 Login
@@ -98,18 +90,88 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              {/* Role badge */}
-              <span className="hidden md:inline-block px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm">
-                Role: {role.toUpperCase()} | {plan.toUpperCase()}
-              </span>
+              <Link href="/account" className="btn-outline">
+                Account
+              </Link>
 
-              <button onClick={logout} className="btn-outline">
+              <button
+                onClick={() => {
+                  logout()
+                  window.location.href = "/"
+                }}
+                className="btn-primary"
+              >
                 Logout
               </button>
             </>
           )}
         </div>
+
+        {/* ✅ Mobile Hamburger */}
+        <button
+          onClick={() => setOpen(!open)}
+          className="md:hidden w-11 h-11 rounded-xl border bg-white flex items-center justify-center"
+          aria-label="Toggle Menu"
+        >
+          {!open ? (
+            <span className="text-2xl">☰</span>
+          ) : (
+            <span className="text-2xl">✕</span>
+          )}
+        </button>
       </div>
+
+      {/* ✅ Mobile Menu */}
+      {open && (
+        <div className="md:hidden border-t bg-white">
+          <div className="container-main py-4 space-y-2">
+            <NavLinks mobile />
+
+            {/* ✅ Mobile Buttons */}
+            <div className="pt-3 border-t mt-3 space-y-2">
+              {!user ? (
+                <>
+                  <Link
+                    onClick={() => setOpen(false)}
+                    href="/login"
+                    className="block w-full text-center px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition"
+                  >
+                    Login
+                  </Link>
+
+                  <Link
+                    onClick={() => setOpen(false)}
+                    href="/signup"
+                    className="block w-full text-center px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    onClick={() => setOpen(false)}
+                    href="/account"
+                    className="block w-full text-center px-6 py-3 rounded-xl border font-semibold hover:bg-slate-50 transition"
+                  >
+                    Account
+                  </Link>
+
+                  <button
+                    onClick={() => {
+                      logout()
+                      window.location.href = "/"
+                    }}
+                    className="w-full px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition"
+                  >
+                    Logout
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

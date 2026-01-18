@@ -13,6 +13,7 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  getDoc,
 } from "firebase/firestore"
 
 export default function AgencyPage() {
@@ -42,29 +43,45 @@ export default function AgencyPage() {
   // ✅ Load Data
   useEffect(() => {
     const u = getUser()
+    if (!u) return
     setUser(u)
 
     // ✅ Load company name (local)
     const savedCompany = localStorage.getItem("agency_company_" + u?.email)
-    if (savedCompany) {
-      setCompanyName(savedCompany)
-    }
+    if (savedCompany) setCompanyName(savedCompany)
 
     // ✅ Employees local
-    const saved = JSON.parse(localStorage.getItem("agency_employees") || "[]")
-    setEmployees(saved)
+    const savedEmployees = JSON.parse(localStorage.getItem("agency_employees") || "[]")
+    setEmployees(savedEmployees)
 
     // ✅ Reports local (only current agency)
     const allReports = JSON.parse(localStorage.getItem("agency_reports") || "[]")
     const myReports = allReports.filter((r) => r.agencyEmail === u?.email)
     setReports(myReports)
 
-    // ✅ (Optional) Firestore load (real)
+    // ✅ Firestore load (real)
     if (u?.uid) {
+      loadFirebaseCompany(u.uid)
       loadFirebaseEmployees(u.uid)
       loadFirebaseReports(u.uid)
     }
   }, [])
+
+  // ✅ Load Company from Firebase
+  async function loadFirebaseCompany(uid) {
+    try {
+      const ref = doc(db, "users", uid)
+      const snap = await getDoc(ref)
+      if (snap.exists()) {
+        const data = snap.data()
+        if (data?.companyName) {
+          setCompanyName(data.companyName)
+        }
+      }
+    } catch (err) {
+      console.log("Firebase company load failed:", err.message)
+    }
+  }
 
   // ✅ Load Employees from Firebase
   async function loadFirebaseEmployees(agencyId) {
@@ -97,18 +114,21 @@ export default function AgencyPage() {
       return
     }
 
+    if (!user?.uid) {
+      alert("Login required ❌")
+      return
+    }
+
     setSavingCompany(true)
     try {
       // ✅ local save
       localStorage.setItem("agency_company_" + user?.email, companyName)
 
       // ✅ firebase save
-      if (user?.uid) {
-        await updateDoc(doc(db, "users", user.uid), {
-          companyName,
-          updatedAt: new Date().toISOString(),
-        })
-      }
+      await updateDoc(doc(db, "users", user.uid), {
+        companyName,
+        updatedAt: new Date().toISOString(),
+      })
 
       alert("✅ Company name saved successfully!")
     } catch (err) {
@@ -118,7 +138,7 @@ export default function AgencyPage() {
     }
   }
 
-  // ✅ Add Employee (firebase + local)
+  // ✅ Add Employee (firebase)
   async function addEmployee() {
     if (!form.name || !form.email || !form.employeeId) {
       alert("Fill required fields ✅")
@@ -137,13 +157,9 @@ export default function AgencyPage() {
         createdAt: new Date().toISOString(),
       }
 
-      // ✅ Firebase save
       await addDoc(collection(db, "employees"), newEmployee)
-
-      // ✅ Reload
       loadFirebaseEmployees(user.uid)
 
-      // ✅ Reset
       setForm({
         name: "",
         email: "",
@@ -178,8 +194,50 @@ export default function AgencyPage() {
     try {
       await deleteDoc(doc(db, "reports", reportId))
       loadFirebaseReports(user.uid)
+      setSelectedReport(null)
     } catch (err) {
       alert("❌ Failed to delete report: " + err.message)
+    }
+  }
+
+  // ✅ Download PDF (Agency Format)
+  async function downloadPDF(reportData) {
+    try {
+      const payload = {
+        ...(reportData?.fullReport || reportData),
+        url: reportData?.url || reportData?.fullReport?.url || "",
+        uxScore: reportData?.uxScore || reportData?.fullReport?.uxScore || 0,
+
+        // ✅ Force Agency PDF format
+        role: "agency",
+        plan: "agency",
+        agencyName: companyName || "Agency",
+      }
+
+      const res = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        alert("❌ PDF generation failed")
+        return
+      }
+
+      const blob = await res.blob()
+      const fileUrl = window.URL.createObjectURL(blob)
+
+      const a = document.createElement("a")
+      a.href = fileUrl
+      a.download = "ux-audit-report-agency.pdf"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(fileUrl)
+    } catch (err) {
+      alert("❌ PDF Error: " + err.message)
     }
   }
 
@@ -243,7 +301,7 @@ export default function AgencyPage() {
               Company Name
             </h2>
             <p className="text-slate-600 text-sm mt-1">
-              This will show on your dashboard every time you login.
+              This will show in your dashboard every time you login.
             </p>
 
             <div className="mt-4 flex flex-col md:flex-row gap-3">
@@ -320,7 +378,14 @@ export default function AgencyPage() {
                             onClick={() => setSelectedReport(r)}
                             className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold hover:bg-black"
                           >
-                            View Report
+                            View
+                          </button>
+
+                          <button
+                            onClick={() => downloadPDF(r)}
+                            className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"
+                          >
+                            PDF
                           </button>
 
                           <button
@@ -333,6 +398,7 @@ export default function AgencyPage() {
                       </tr>
                     ))}
                   </tbody>
+
                 </table>
               </div>
             )}
@@ -382,7 +448,7 @@ export default function AgencyPage() {
                         <td className="p-4 font-semibold text-slate-900">{e.name}</td>
                         <td className="p-4 text-slate-700">{e.email}</td>
                         <td className="p-4 text-slate-700">{e.employeeId}</td>
-                        <td className="p-4 text-slate-700">{e.company}</td>
+                        <td className="p-4 text-slate-700">{e.company || "—"}</td>
                         <td className="p-4 text-slate-700">{e.position || "—"}</td>
                         <td className="p-4 text-right">
                           <button
@@ -395,12 +461,13 @@ export default function AgencyPage() {
                       </tr>
                     ))}
                   </tbody>
+
                 </table>
               </div>
             )}
           </div>
 
-          {/* ✅ ADD EMPLOYEE FORM MODAL */}
+          {/* ✅ ADD EMPLOYEE MODAL */}
           {showForm && (
             <div className="fixed inset-0 bg-black/30 flex items-center justify-center px-4 z-50">
               <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6">
@@ -436,7 +503,7 @@ export default function AgencyPage() {
           {/* ✅ VIEW REPORT MODAL */}
           {selectedReport && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
-              <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl p-6 overflow-auto max-h-[85vh]">
+              <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl p-6 overflow-auto max-h-[85vh]">
                 <div className="flex justify-between items-start gap-3">
                   <div>
                     <h3 className="text-xl font-extrabold text-slate-900">Audit Report</h3>
@@ -444,12 +511,22 @@ export default function AgencyPage() {
                       {selectedReport.url}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setSelectedReport(null)}
-                    className="px-4 py-2 rounded-xl border font-semibold hover:bg-slate-50"
-                  >
-                    Close
-                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => downloadPDF(selectedReport)}
+                      className="px-4 py-2 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700"
+                    >
+                      Download PDF
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedReport(null)}
+                      className="px-4 py-2 rounded-xl border font-semibold hover:bg-slate-50"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-6 grid sm:grid-cols-2 gap-4">

@@ -116,6 +116,215 @@ export default function Home() {
             </div>
           </section>
 
+          {/* ✅ WHY CHOOSE UXAUDITPRO */}
+<section className="mt-24">
+  <div className="text-center max-w-3xl mx-auto">
+    <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">
+      Why choose <span className="text-indigo-600">UXAuditPro</span>?
+    </h2>
+    <p className="text-slate-600 mt-4 text-lg">
+      Most tools give you generic reports. UXAuditPro gives you fast, actionable
+      fixes that actually improve conversion and user experience.
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-3 gap-6 mt-12">
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">
+        ⚡
+      </div>
+      <h3 className="font-extrabold text-lg mt-4 text-slate-900">
+        Instant Audit Results
+      </h3>
+      <p className="text-slate-600 mt-2 leading-relaxed">
+        Get a UX score + top issues in seconds. No waiting, no heavy setup.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">
+        🎯
+      </div>
+      <h3 className="font-extrabold text-lg mt-4 text-slate-900">
+        Actionable Recommendations
+      </h3>
+      <p className="text-slate-600 mt-2 leading-relaxed">
+        Clear suggestions that improve trust, readability, CTA placement, and
+        conversion.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">
+        📄
+      </div>
+      <h3 className="font-extrabold text-lg mt-4 text-slate-900">
+        Client-Ready PDF Reports
+      </h3>
+      <p className="text-slate-600 mt-2 leading-relaxed">
+        Export clean reports that look professional and easy to understand.
+      </p>
+    </div>
+  </div>
+</section>
+
+{/* ✅ COMPARISON TABLE */}
+<section className="mt-24">
+  <div className="text-center max-w-3xl mx-auto">
+    <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">
+      UXAuditPro vs Others
+    </h2>
+    <p className="text-slate-600 mt-4 text-lg">
+      Here’s why founders, agencies, and teams prefer UXAuditPro.
+    </p>
+  </div>
+
+  <div className="mt-12 overflow-hidden rounded-3xl border bg-white shadow-sm">
+    <div className="grid md:grid-cols-2">
+
+      {/* LEFT (UXAuditPro) */}
+      <div className="p-8 md:p-10 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+        <h3 className="text-2xl font-extrabold">UXAuditPro</h3>
+        <p className="text-white/90 mt-2">
+          Built for speed, clarity, and real conversion improvement.
+        </p>
+
+        <ul className="mt-6 space-y-3 text-white/95 font-semibold">
+          <li className="flex gap-3">
+            <span className="text-white">✅</span> Instant UX Score + Problems
+          </li>
+          <li className="flex gap-3">
+            <span className="text-white">✅</span> Simple + clear recommendations
+          </li>
+          <li className="flex gap-3">
+            <span className="text-white">✅</span> PDF reports for clients
+          </li>
+          <li className="flex gap-3">
+            <span className="text-white">✅</span> Agency dashboard + employee system
+          </li>
+          <li className="flex gap-3">
+            <span className="text-white">✅</span> Built for mobile + desktop UX
+          </li>
+        </ul>
+      </div>
+
+      {/* RIGHT (Others) */}
+      <div className="p-8 md:p-10">
+        <h3 className="text-2xl font-extrabold text-slate-900">Other Tools</h3>
+        <p className="text-slate-600 mt-2">
+          Usually complex, slow, or too technical for fast actions.
+        </p>
+
+        <ul className="mt-6 space-y-3 text-slate-700 font-semibold">
+          <li className="flex gap-3">
+            <span className="text-red-500">✖</span> Generic reports with no direction
+          </li>
+          <li className="flex gap-3">
+            <span className="text-red-500">✖</span> Hard-to-understand audit output
+          </li>
+          <li className="flex gap-3">
+            <span className="text-red-500">✖</span> No client-friendly PDF report
+          </li>
+          <li className="flex gap-3">
+            <span className="text-red-500">✖</span> No agency/team features
+          </li>
+          <li className="flex gap-3">
+            <span className="text-red-500">✖</span> Too technical for business owners
+          </li>
+        </ul>
+
+        <div className="mt-8">
+          <a
+            href="/pricing"
+            className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-black transition"
+          >
+            Upgrade & Unlock Features →
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+{/* ✅ FAQ SECTION */}
+<section className="mt-24">
+  <div className="text-center max-w-3xl mx-auto">
+    <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">
+      Frequently Asked Questions
+    </h2>
+    <p className="text-slate-600 mt-4 text-lg">
+      Everything you need to know before starting with UXAuditPro.
+    </p>
+  </div>
+
+  <div className="mt-12 grid md:grid-cols-2 gap-6">
+    {/* FAQ Card */}
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        What is UXAuditPro?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        UXAuditPro is a UX audit SaaS that analyzes your website and gives you a
+        UX score, common UX issues, and improvement recommendations to boost
+        conversions.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        Who should use UXAuditPro?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        Founders, marketers, agencies, and teams who want quick UX fixes,
+        clearer conversion improvements, and professional reports for clients.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        Does Free plan have limitations?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        Yes. Free plan allows limited audits per day. Pro and Agency unlock
+        unlimited audits, extra features, and premium report exports.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        Will I get AI suggestions?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        Yes. Pro and Agency plans include AI-powered suggestions (we’ll keep
+        improving it for more detailed UX fixes and conversion improvements).
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        Can agencies manage employees?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        Yes. Agency dashboard allows employee management, team access, and
+        client-friendly workflow for scaling audits.
+      </p>
+    </div>
+
+    <div className="card-hover p-7 bg-white rounded-2xl border shadow-sm">
+      <h3 className="font-extrabold text-lg text-slate-900">
+        Can I upgrade anytime?
+      </h3>
+      <p className="text-slate-600 mt-3 leading-relaxed">
+        Absolutely. You can upgrade to Pro or Agency anytime from the Pricing
+        page, and your dashboard features will unlock immediately after payment.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+
           {/* ✅ CTA SECTION */}
           <section className="mt-24">
             <div className="card-hover p-12 rounded-3xl bg-gradient-to-r from-indigo-600 to-indigo-500 text-white text-center shadow-lg animate-fadeUp">

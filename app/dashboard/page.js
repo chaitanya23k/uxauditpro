@@ -2,63 +2,34 @@
 import { useEffect, useState } from "react"
 import Navbar from "@/components/Navbar"
 import ProtectedRoute from "@/components/ProtectedRoute"
-import { auth, db } from "@/lib/firebase"
-import { onAuthStateChanged } from "firebase/auth"
-import { doc, getDoc, setDoc, collection, addDoc } from "firebase/firestore"
+import { getUser } from "@/lib/auth"
+import { db } from "@/lib/firebase"
+import { addDoc, collection } from "firebase/firestore"
 
 export default function Dashboard() {
-  const [userData, setUserData] = useState(null)
+  const [user, setUser] = useState(null)
 
   const [url, setUrl] = useState("")
   const [result, setResult] = useState(null)
 
+  const [aiText, setAiText] = useState("")
+  const [aiLoading, setAiLoading] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState([])
 
-  // ✅ Load history from localStorage (optional)
   useEffect(() => {
+    const u = getUser()
+    setUser(u)
     const saved = JSON.parse(localStorage.getItem("audit_history") || "[]")
     setHistory(saved)
   }, [])
 
-  // ✅ Load user plan+role from Firestore
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) return
+  const role = user?.role || "user"
+  const plan = user?.plan || "free"
 
-      const ref = doc(db, "users", user.uid)
-      const snap = await getDoc(ref)
-
-      if (snap.exists()) {
-        setUserData({ uid: user.uid, ...snap.data() })
-      } else {
-        // ✅ if missing user doc, create basic
-        const newUser = {
-          name: user.displayName || "User",
-          email: user.email,
-          role: "user",
-          plan: "free",
-          createdAt: new Date().toISOString(),
-        }
-
-        await setDoc(ref, newUser)
-        setUserData({ uid: user.uid, ...newUser })
-      }
-    })
-
-    return () => unsub()
-  }, [])
-
-  const plan = userData?.plan || "free"
-  const role = userData?.role || "user"
-
-  function canUseAI() {
-    return plan === "pro" || plan === "agency" || role === "admin"
-  }
-
-  function canDownloadPDF() {
-    return plan === "pro" || plan === "agency" || role === "admin"
-  }
+  const canUseAI = plan === "pro" || plan === "agency" || role === "admin"
+  const canDownloadPDF = plan === "pro" || plan === "agency" || role === "admin"
 
   async function runAudit() {
     if (!url.trim()) {
@@ -70,14 +41,14 @@ export default function Dashboard() {
     if (plan === "free") {
       const today = new Date().toDateString()
       const usedToday = history.some((h) => h.day === today)
-
       if (usedToday) {
-        alert("❌ Free plan allows only 1 audit per day. Upgrade to Pro!")
+        alert("❌ Free plan allows only 1 audit/day. Upgrade to Pro!")
         return
       }
     }
 
     setLoading(true)
+    setAiText("")
     setResult(null)
 
     try {
@@ -88,9 +59,11 @@ export default function Dashboard() {
       })
 
       if (!res.ok) throw new Error("Audit API failed")
+
       const data = await res.json()
       setResult(data)
 
+      // ✅ HISTORY (local)
       const newItem = {
         id: Date.now(),
         url: data.url,
@@ -100,29 +73,165 @@ export default function Dashboard() {
         day: new Date().toDateString(),
       }
 
-      // ✅ Save history locally
       setHistory((prev) => {
         const updated = [newItem, ...prev].slice(0, 10)
         localStorage.setItem("audit_history", JSON.stringify(updated))
         return updated
       })
 
-      // ✅ Save report into Firebase (agency/admin/user)
-      await addDoc(collection(db, "reports"), {
-        url: data.url,
-        uxScore: data.uxScore,
-        fullReport: data,
-        createdAt: new Date().toISOString(),
-        userEmail: userData?.email || "N/A",
-        role: role,
-        plan: plan,
-      })
+      // ✅ AGENCY REPORT SAVE (Local + Firebase)
+      if (role === "agency") {
+        const reportItem = {
+          agencyId: user?.uid || "",
+          agencyEmail: user?.email || "",
+          url: data.url,
+          uxScore: data.uxScore,
+          createdAt: new Date().toISOString(),
+          fullReport: data,
+        }
+
+        // ✅ Local save (prevent duplicates)
+        const old = JSON.parse(localStorage.getItem("agency_reports") || "[]")
+        const filteredOld = old.filter((r) => r.url !== reportItem.url)
+
+        localStorage.setItem(
+          "agency_reports",
+          JSON.stringify([reportItem, ...filteredOld])
+        )
+
+        // ✅ Firebase save
+        try {
+          await addDoc(collection(db, "reports"), reportItem)
+        } catch (e) {
+          console.log("Firebase report save failed:", e.message)
+        }
+      }
     } catch (err) {
-      alert(err.message)
+      alert("❌ " + err.message)
     } finally {
       setLoading(false)
     }
   }
+
+  async function getAiSuggestions() {
+    if (!result) return alert("Run audit first!")
+
+    if (!canUseAI) {
+      alert("❌ AI Suggestions are only for PRO/AGENCY/ADMIN.")
+      return
+    }
+
+    setAiLoading(true)
+    setAiText("")
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audit: result }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setAiText("❌ AI Error: " + (data.error || "Something went wrong"))
+      } else {
+        setAiText(data.suggestions || "No AI suggestions received.")
+      }
+    } catch (err) {
+      setAiText("❌ AI Error: " + err.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // ✅ Get screenshot from backend
+  async function fetchScreenshot(targetUrl) {
+    try {
+      const res = await fetch("/api/screenshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) return null
+
+      return data?.image || null
+    } catch (err) {
+      console.log("Screenshot error:", err.message)
+      return null
+    }
+  }
+
+  async function downloadPDF() {
+  if (!result) return
+
+  if (!canDownloadPDF) {
+    alert("❌ PDF is locked in Free plan. Upgrade to Pro.")
+    return
+  }
+
+  try {
+    // ✅ Step 1: Get Screenshot from API
+    let screenshot = null
+    try{
+    const shotRes = await fetch("/api/screenshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: result.url }),
+    })
+
+    const shotData = await shotRes.json()
+
+    if(shotRes.ok && shotData?.image){
+      screenshot = shotData.image
+    }
+  }catch(err){
+    console.log("screenshot fetch failed:", err.message)
+  }
+
+    // ✅ Step 2: Prepare Payload with screenshot
+    const payload = {
+      ...result,
+      screenshot: screenshot, // 
+      role: role,
+      plan: plan,
+
+      // ✅ optional agency branding fields (only for agency report)
+      agencyName: user?.companyName || "WebDigiz",
+      agencyWebsite: "www.webdigiz.com",
+    }
+
+    // ✅ Step 3: Send to PDF API
+    const res = await fetch("/api/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      alert("❌ PDF generation failed: " + (errData?.details || "Unknown error"))
+      return
+    }
+
+    const blob = await res.blob()
+    const fileUrl = window.URL.createObjectURL(blob)
+
+    const a = document.createElement("a")
+    a.href = fileUrl
+    a.download = "ux-audit-report.pdf"
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+
+    window.URL.revokeObjectURL(fileUrl)
+  } catch (err) {
+    alert("❌ PDF Error: " + err.message)
+  }
+}
+
 
   return (
     <ProtectedRoute allowedRoles={["user", "agency", "admin"]}>
@@ -134,15 +243,14 @@ export default function Dashboard() {
             <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900">
               UX Audit Dashboard
             </h1>
-
             <p className="text-slate-600 mt-2">
-              Your current plan:{" "}
+              Plan:{" "}
               <span className="font-bold text-indigo-600">
-                {plan.toUpperCase()}
-              </span>{" "}
-              — Role:{" "}
+                {(plan || "free").toUpperCase()}
+              </span>
+              {" "} | Role:{" "}
               <span className="font-bold text-slate-900">
-                {role.toUpperCase()}
+                {(role || "user").toUpperCase()}
               </span>
             </p>
           </div>
@@ -172,7 +280,7 @@ export default function Dashboard() {
 
                 {plan === "free" && (
                   <p className="text-xs text-red-500 mt-3">
-                    Free plan: Only 1 audit/day — upgrade to Pro for unlimited.
+                    Free plan: Only 1 audit/day.
                   </p>
                 )}
               </div>
@@ -187,7 +295,10 @@ export default function Dashboard() {
                     {history.map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => setResult(item.fullReport)}
+                        onClick={() => {
+                          setResult(item.fullReport)
+                          setAiText("")
+                        }}
                         className="w-full text-left border rounded-xl p-3 hover:bg-slate-50"
                       >
                         <div className="flex justify-between items-start gap-3">
@@ -201,19 +312,6 @@ export default function Dashboard() {
                     ))}
                   </div>
                 )}
-
-                {history.length > 0 && (
-                  <button
-                    onClick={() => {
-                      localStorage.removeItem("audit_history")
-                      setHistory([])
-                      setResult(null)
-                    }}
-                    className="mt-4 w-full bg-red-500 text-white py-2 rounded-xl hover:bg-red-600"
-                  >
-                    Clear History
-                  </button>
-                )}
               </div>
             </div>
 
@@ -226,11 +324,31 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="bg-white border rounded-2xl p-8 shadow-sm">
-                  <h2 className="text-2xl font-bold">
-                    UX Score:{" "}
-                    <span className="text-indigo-600">{result.uxScore}</span>
-                  </h2>
-                  <p className="text-slate-600 break-all">{result.url}</p>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl font-bold">
+                        UX Score:{" "}
+                        <span className="text-indigo-600">{result.uxScore}</span>
+                      </h2>
+                      <p className="text-slate-600 break-all">{result.url}</p>
+                    </div>
+
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={getAiSuggestions}
+                        className="px-5 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-black"
+                      >
+                        {aiLoading ? "Generating..." : "AI Suggestions"}
+                      </button>
+
+                      <button
+                        onClick={downloadPDF}
+                        className="px-5 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700"
+                      >
+                        Download PDF
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="mt-8 grid md:grid-cols-2 gap-6">
                     <div className="bg-slate-50 border rounded-2xl p-6">
@@ -252,15 +370,18 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {!canDownloadPDF() && (
-                    <p className="text-sm text-red-500 mt-6">
-                      ❌ PDF Export is locked in Free plan. Upgrade to Pro.
-                    </p>
+                  {aiText && (
+                    <div className="mt-8 bg-indigo-50 border border-indigo-200 rounded-2xl p-6">
+                      <h3 className="font-bold text-indigo-900 mb-2">
+                        AI Suggestions
+                      </h3>
+                      <p className="text-slate-700 whitespace-pre-wrap">{aiText}</p>
+                    </div>
                   )}
 
-                  {!canUseAI() && (
-                    <p className="text-sm text-red-500 mt-2">
-                      ❌ AI Suggestions are locked in Free plan. Upgrade to Pro.
+                  {!canDownloadPDF && (
+                    <p className="text-sm text-red-500 mt-6">
+                      ❌ PDF locked in Free plan.
                     </p>
                   )}
                 </div>
