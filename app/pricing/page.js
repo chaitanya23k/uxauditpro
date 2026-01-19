@@ -9,11 +9,13 @@ export default function PricingPage() {
   const [loadingPlan, setLoadingPlan] = useState(null)
   const [showPayPal, setShowPayPal] = useState(null) // "pro" | "agency"
 
-  async function payWithRazorpay(plan, amountUSD) {
-    const user = getUser()
+  // ✅ Get logged-in user
+  const user = getUser()
+  const isLoggedIn = !!user
 
-    if (!user) {
-      alert("Please login/signup first.")
+  async function payWithRazorpay(plan, amountUSD) {
+    if (!isLoggedIn) {
+      alert("Please login/signup first ✅")
       window.location.href = "/signup"
       return
     }
@@ -59,8 +61,8 @@ export default function PricingPage() {
         },
 
         prefill: {
-          name: user.name || "",
-          email: user.email || "",
+          name: user?.name || "",
+          email: user?.email || "",
         },
 
         theme: { color: "#4f46e5" },
@@ -76,9 +78,8 @@ export default function PricingPage() {
   }
 
   function chooseFree() {
-    const user = getUser()
-    if (!user) {
-      alert("Please login/signup first.")
+    if (!isLoggedIn) {
+      alert("Please login/signup first ✅")
       window.location.href = "/signup"
       return
     }
@@ -94,13 +95,22 @@ export default function PricingPage() {
     window.location.href = plan === "agency" ? "/agency" : "/dashboard"
   }
 
+  function togglePayPal(plan) {
+    if (!isLoggedIn) {
+      alert("Please login/signup first ✅")
+      window.location.href = "/signup"
+      return
+    }
+
+    setShowPayPal(showPayPal === plan ? null : plan)
+  }
+
   return (
     <>
       <Navbar />
 
       <main className="bg-slate-50 min-h-screen py-16 px-4">
         <div className="max-w-6xl mx-auto">
-
           {/* Header */}
           <div className="text-center max-w-2xl mx-auto">
             <h1 className="text-4xl font-extrabold text-slate-900">Pricing</h1>
@@ -115,11 +125,16 @@ export default function PricingPage() {
                 Secure checkout (Razorpay / PayPal)
               </span>
             </div>
+
+            {!isLoggedIn && (
+              <p className="mt-4 text-sm text-red-500 font-semibold">
+                ⚠️ Please login to purchase Pro or Agency plan.
+              </p>
+            )}
           </div>
 
           {/* Cards */}
           <div className="grid md:grid-cols-3 gap-6 mt-12">
-
             {/* Free */}
             <PlanCard
               title="Free"
@@ -143,26 +158,22 @@ export default function PricingPage() {
               title="Pro"
               price="$29"
               subtitle="For founders & marketers"
-              features={[
-                "Unlimited audits",
-                "AI Suggestions",
-                "PDF Export",
-                "Audit history",
-              ]}
+              features={["Unlimited audits", "AI Suggestions", "PDF Export", "Audit history"]}
               buttonText={loadingPlan === "pro" ? "Processing..." : "Pay with Razorpay"}
               onClick={() => payWithRazorpay("pro", 29)}
               type="primary"
-              disabled={loadingPlan === "pro"}
+              disabled={loadingPlan === "pro" || !isLoggedIn}
               extra={
                 <>
                   <button
-                    onClick={() => setShowPayPal(showPayPal === "pro" ? null : "pro")}
-                    className="w-full mt-3 border rounded-xl py-3 font-semibold hover:bg-white"
+                    onClick={() => togglePayPal("pro")}
+                    disabled={!isLoggedIn}
+                    className="w-full mt-3 border rounded-xl py-3 font-semibold hover:bg-white disabled:opacity-50"
                   >
                     Pay with PayPal
                   </button>
 
-                  {showPayPal === "pro" && (
+                  {showPayPal === "pro" && isLoggedIn && (
                     <div className="mt-4">
                       <PayPalButton
                         amount={29}
@@ -188,17 +199,18 @@ export default function PricingPage() {
               buttonText={loadingPlan === "agency" ? "Processing..." : "Pay with Razorpay"}
               onClick={() => payWithRazorpay("agency", 99)}
               type="outline"
-              disabled={loadingPlan === "agency"}
+              disabled={loadingPlan === "agency" || !isLoggedIn}
               extra={
                 <>
                   <button
-                    onClick={() => setShowPayPal(showPayPal === "agency" ? null : "agency")}
-                    className="w-full mt-3 border rounded-xl py-3 font-semibold hover:bg-white"
+                    onClick={() => togglePayPal("agency")}
+                    disabled={!isLoggedIn}
+                    className="w-full mt-3 border rounded-xl py-3 font-semibold hover:bg-white disabled:opacity-50"
                   >
                     Pay with PayPal
                   </button>
 
-                  {showPayPal === "agency" && (
+                  {showPayPal === "agency" && isLoggedIn && (
                     <div className="mt-4">
                       <PayPalButton
                         amount={99}
