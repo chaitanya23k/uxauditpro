@@ -1,4 +1,5 @@
 "use client"
+
 import { useEffect, useState } from "react"
 import Navbar from "@/components/Navbar"
 import ProtectedRoute from "@/components/ProtectedRoute"
@@ -21,6 +22,7 @@ export default function Dashboard() {
   useEffect(() => {
     const u = getUser()
     setUser(u)
+
     const saved = JSON.parse(localStorage.getItem("audit_history") || "[]")
     setHistory(saved)
   }, [])
@@ -79,10 +81,10 @@ export default function Dashboard() {
         return updated
       })
 
-      // ✅ AGENCY REPORT SAVE (Local + Firebase)
+      // ✅ AGENCY REPORTS SAVE (Firebase + Local) ✅ FIXED
       if (role === "agency") {
         const reportItem = {
-          agencyId: user?.uid || "",
+          agencyId: user?.uid || "", // ✅ must exist
           agencyEmail: user?.email || "",
           url: data.url,
           uxScore: data.uxScore,
@@ -90,21 +92,18 @@ export default function Dashboard() {
           fullReport: data,
         }
 
-        // ✅ Local save (prevent duplicates)
+        // ✅ Save Local (instant UI)
         const old = JSON.parse(localStorage.getItem("agency_reports") || "[]")
-        const filteredOld = old.filter((r) => r.url !== reportItem.url)
 
-        localStorage.setItem(
-          "agency_reports",
-          JSON.stringify([reportItem, ...filteredOld])
+        // ✅ prevent duplicates
+        const filteredOld = old.filter(
+          (r) => (r.url || "").toLowerCase() !== (reportItem.url || "").toLowerCase()
         )
 
-        // ✅ Firebase save
-        try {
-          await addDoc(collection(db, "reports"), reportItem)
-        } catch (e) {
-          console.log("Firebase report save failed:", e.message)
-        }
+        localStorage.setItem("agency_reports", JSON.stringify([reportItem, ...filteredOld]))
+
+        // ✅ Save Firestore (Real)
+        await addDoc(collection(db, "reports"), reportItem)
       }
     } catch (err) {
       alert("❌ " + err.message)
@@ -114,10 +113,13 @@ export default function Dashboard() {
   }
 
   async function getAiSuggestions() {
-    if (!result) return alert("Run audit first!")
+    if (!result) {
+      alert("Run audit first!")
+      return
+    }
 
     if (!canUseAI) {
-      alert("❌ AI Suggestions are only for PRO/AGENCY/ADMIN.")
+      alert("❌ AI Suggestions are only for PRO / AGENCY plans.")
       return
     }
 
@@ -145,93 +147,57 @@ export default function Dashboard() {
     }
   }
 
-  // ✅ Get screenshot from backend
-  async function fetchScreenshot(targetUrl) {
-    try {
-      const res = await fetch("/api/screenshot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: targetUrl }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) return null
-
-      return data?.image || null
-    } catch (err) {
-      console.log("Screenshot error:", err.message)
-      return null
-    }
-  }
-
   async function downloadPDF() {
-  if (!result) return
+    if (!result) return
 
-  if (!canDownloadPDF) {
-    alert("❌ PDF is locked in Free plan. Upgrade to Pro.")
-    return
-  }
-
-  try {
-    // ✅ Step 1: Get Screenshot from API
-    let screenshot = null
-    try{
-    const shotRes = await fetch("/api/screenshot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: result.url }),
-    })
-
-    const shotData = await shotRes.json()
-
-    if(shotRes.ok && shotData?.image){
-      screenshot = shotData.image
-    }
-  }catch(err){
-    console.log("screenshot fetch failed:", err.message)
-  }
-
-    // ✅ Step 2: Prepare Payload with screenshot
-    const payload = {
-      ...result,
-      screenshot: screenshot, // 
-      role: role,
-      plan: plan,
-
-      // ✅ optional agency branding fields (only for agency report)
-      agencyName: user?.companyName || "WebDigiz",
-      agencyWebsite: "www.webdigiz.com",
-    }
-
-    // ✅ Step 3: Send to PDF API
-    const res = await fetch("/api/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      alert("❌ PDF generation failed: " + (errData?.details || "Unknown error"))
+    if (!canDownloadPDF) {
+      alert("❌ PDF Export is locked in Free plan. Upgrade to Pro.")
       return
     }
 
-    const blob = await res.blob()
-    const fileUrl = window.URL.createObjectURL(blob)
+    try {
+      const payload = {
+        ...result,
+        role,
+        plan,
+      }
 
-    const a = document.createElement("a")
-    a.href = fileUrl
-    a.download = "ux-audit-report.pdf"
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
+      const res = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
-    window.URL.revokeObjectURL(fileUrl)
-  } catch (err) {
-    alert("❌ PDF Error: " + err.message)
+      if (!res.ok) {
+        alert("❌ PDF generation failed")
+        return
+      }
+
+      const blob = await res.blob()
+      const fileUrl = window.URL.createObjectURL(blob)
+
+      const a = document.createElement("a")
+      a.href = fileUrl
+      a.download = "ux-audit-report.pdf"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(fileUrl)
+    } catch (err) {
+      alert("❌ PDF Error: " + err.message)
+    }
   }
-}
 
+  function clearHistory() {
+    const ok = confirm("Clear all audit history?")
+    if (!ok) return
+
+    localStorage.removeItem("audit_history")
+    setHistory([])
+    setResult(null)
+    setAiText("")
+  }
 
   return (
     <ProtectedRoute allowedRoles={["user", "agency", "admin"]}>
@@ -239,23 +205,36 @@ export default function Dashboard() {
 
       <main className="bg-slate-50 min-h-screen py-10 px-4">
         <div className="max-w-5xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900">
-              UX Audit Dashboard
-            </h1>
-            <p className="text-slate-600 mt-2">
-              Plan:{" "}
-              <span className="font-bold text-indigo-600">
-                {(plan || "free").toUpperCase()}
-              </span>
-              {" "} | Role:{" "}
-              <span className="font-bold text-slate-900">
-                {(role || "user").toUpperCase()}
-              </span>
-            </p>
+
+          <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900">
+                UX Audit Dashboard
+              </h1>
+              <p className="text-slate-600 mt-2">
+                Plan:{" "}
+                <span className="font-bold text-indigo-600">
+                  {(plan || "free").toUpperCase()}
+                </span>{" "}
+                | Role:{" "}
+                <span className="font-bold text-slate-900">
+                  {(role || "user").toUpperCase()}
+                </span>
+              </p>
+            </div>
+
+            {history.length > 0 && (
+              <button
+                onClick={clearHistory}
+                className="px-4 py-2 rounded-xl border bg-white font-semibold hover:bg-slate-50"
+              >
+                Clear History
+              </button>
+            )}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
+
             {/* LEFT */}
             <div className="space-y-6">
               <div className="bg-white border rounded-2xl p-6 shadow-sm">
@@ -286,10 +265,14 @@ export default function Dashboard() {
               </div>
 
               <div className="bg-white border rounded-2xl p-6 shadow-sm">
-                <h2 className="text-lg font-bold mb-4 text-slate-900">History</h2>
+                <h2 className="text-lg font-bold mb-4 text-slate-900">
+                  History
+                </h2>
 
                 {history.length === 0 ? (
-                  <p className="text-slate-500 text-sm">No audits yet.</p>
+                  <p className="text-slate-500 text-sm">
+                    No audits yet.
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {history.map((item) => (
@@ -320,7 +303,9 @@ export default function Dashboard() {
               {!result ? (
                 <div className="bg-white border rounded-2xl p-10 shadow-sm text-center">
                   <h2 className="text-2xl font-bold mb-2">No Audit Yet</h2>
-                  <p className="text-slate-600">Run your first audit to see results.</p>
+                  <p className="text-slate-600">
+                    Run your first audit to see results.
+                  </p>
                 </div>
               ) : (
                 <div className="bg-white border rounded-2xl p-8 shadow-sm">
@@ -384,9 +369,16 @@ export default function Dashboard() {
                       ❌ PDF locked in Free plan.
                     </p>
                   )}
+
+                  {!canUseAI && (
+                    <p className="text-sm text-red-500 mt-2">
+                      ❌ AI Suggestions locked in Free plan.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
+
           </div>
         </div>
       </main>

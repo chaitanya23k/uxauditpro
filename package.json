@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@paypal/paypal-js": "^9.2.0",
     "@sparticuz/chromium": "^143.0.4",
     "firebase": "^12.8.0",
     "firebase-admin": "^13.6.0",

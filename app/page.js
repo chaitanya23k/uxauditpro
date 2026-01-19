@@ -358,13 +358,31 @@ export default function Home() {
       </main>
 
       {/* ✅ Footer */}
-      <footer className="border-t py-8 bg-white">
-        <div className="container-main">
-          <p className="text-center text-slate-500 text-sm">
-            © {new Date().getFullYear()} UXAuditPro — Built for growth 🚀 || A product of <a href="https://www.webdigiz.com">WEBDIGIZ</a>
-          </p>
+      <footer className="border-t bg-white">
+      <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <p className="text-sm text-slate-500">
+          © {new Date().getFullYear()} UXAuditPro • Powered by WebDigiz
+        </p>
+
+        <div className="flex gap-5 text-sm font-semibold text-slate-700 flex-wrap justify-center">
+          <a href="/about" className="hover:text-indigo-600">
+            About
+          </a>
+
+          <a href="/contact" className="hover:text-indigo-600">
+            Contact
+          </a>
+
+          <a href="/privacy-policy" className="hover:text-indigo-600">
+            Privacy Policy
+          </a>
+
+          <a href="/terms" className="hover:text-indigo-600">
+            Terms & Conditions
+          </a>
         </div>
-      </footer>
+      </div>
+    </footer>
     </>
   )
 }
